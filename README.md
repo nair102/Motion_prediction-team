@@ -36,9 +36,17 @@ sudo apt-get install texlive-latex-extra texlive-fonts-recommended dvipng cm-sup
 
 
 ## MixNet training and evaluation
-A MixNet training can be started with the following command:
+A MixNet training can be started with the following command for the code's mix_net:
 ```
 python train/mix_net_trainer.py
+```
+A MixNet training can be started with the following command for the paper's mixnet:
+```
+python train/papers_model_trainer.py
+```
+A MixNet training can be started with the following command for the full_transformer's model:
+```
+python train/full_transformer_trainer.py
 ```
 All parameters used for the training and evaluation are specified in the MixNet-config-files ([train config](train/configs/mix_net/trainer_params_train.json), [test config](train/configs/mix_net/trainer_params_test.json)). Per default `10` exemplary scenarios are plotted to show the prediction behavior. The number of plotted scenarios can be changed by the flag `--max_plots`. Add `--plt_vel` to evaluate the velocity profile additionally. To save the plots instead of showing them, use the flag `--save_figs`, which stores the plots to [train/figs](train/figs). To run an evaluation of a trained net, add the argument `--test` and run the script again. 
 
