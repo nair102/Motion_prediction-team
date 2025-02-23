@@ -3,10 +3,10 @@
     "encoder": {
         "in_size": 64,
         "hidden_size": 64,
-        "nhead":4,
-        "dim_feedforward":600,
-        "dropout":0.2,
-        "num_layers":10
+        "nhead": 4,
+        "dim_feedforward": 256,
+        "dropout": 0.2,
+        "num_layers": 2
     },
     "mixer_linear_stack": {
         "hidden_sizes": [
