@@ -133,16 +133,17 @@ class newMixNet2(nn.Module):
         hist_emb = self._ip_emb(hist.to(self.device))
         left_emb = self._ip_emb(left_bound.to(self.device))
         right_emb = self._ip_emb(right_bound.to(self.device))
+        # Transpose for transformers:
+        hist_emb = hist_emb.transpose(0, 1)  # [seq_len, batch_size, feature_size]
+        left_emb = left_emb.transpose(0, 1)
+        right_emb = right_emb.transpose(0, 1)
 
     # Positional encoding for the inputs:
         hist_emb = self._add_positional_encoding(hist_emb)
         left_emb = self._add_positional_encoding(left_emb)
         right_emb = self._add_positional_encoding(right_emb)
 
-    # Transpose for transformers:
-        hist_emb = hist_emb.transpose(0, 1)  # [seq_len, batch_size, feature_size]
-        left_emb = left_emb.transpose(0, 1)
-        right_emb = right_emb.transpose(0, 1)
+    
 
     # History encoding using Transformer:
         hist_enc = self._enc_hist(hist_emb)
