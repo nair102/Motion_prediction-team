@@ -53,6 +53,8 @@ class MixNetTrainer:
         self._params = params
         self._net = net.float()
         self._device = self._net.device
+        self.train_losses = [] 
+        self.val_losses = []  
 
         # loss function:
         self._set_lossfunction()
@@ -333,6 +335,9 @@ class MixNetTrainer:
 
         self._write_summary("Computation Time/Train", (time.time() - t0), epoch)
 
+        epoch_total_loss = epoch_path_loss + epoch_vel_loss
+        self.train_losses.append(epoch_total_loss.item())
+
         return epoch_path_loss, epoch_vel_loss
 
     def _validate(self, epoch):
@@ -384,6 +389,9 @@ class MixNetTrainer:
                     print("New best model was saved.")
 
         self._write_summary("Computation Time/Val", (time.time() - t0), epoch)
+
+        epoch_total_loss = epoch_path_loss + epoch_vel_loss
+        self.val_losses.append(epoch_total_loss.item())
 
         return epoch_path_loss, epoch_vel_loss
 
@@ -911,53 +919,81 @@ if __name__ == "__main__":
     parser.add_argument("--save_figs", action="store_true")
     args = parser.parse_args()
 
-    # reading the parameter files:
-    net_param_file = os.path.join(repo_path, "train/configs/mix_net/net_full_params.json")
+    # Batch sizes to test
+    batch_sizes = [5, 10, 20, 30, 40, 50]
+    all_train_losses = {}
+    all_val_losses = {}
 
-    if args.test:
-        trainer_param_file = os.path.join(
-            repo_path,
-            "train/configs/mix_net/trainer_params_test.json",
-        )
-    else:
-        trainer_param_file = os.path.join(
-            repo_path,
-            "train/configs/mix_net/trainer_params_train.json",
-        )
+    # Load base parameters
+    net_param_file = os.path.join(repo_path, "train/configs/mix_net/net_full_params.json")
+    trainer_param_file = os.path.join(
+        repo_path,
+        "train/configs/mix_net/trainer_params_train.json",
+    )
 
     with open(net_param_file, "r") as fp:
         net_params = json.load(fp)
 
     with open(trainer_param_file, "r") as fp:
-        trainer_params = json.load(fp)
+        base_trainer_params = json.load(fp)
 
-    # creating the network and loading the weights:
-    net = newMixNet2(net_params)
-    if trainer_params["model"]["load_model"]:
-        success = net.load_model_weights(trainer_params["model"]["model_load_path"])
-        if not success:
-            print(
-                "Could not load model from file {}".format(
-                    trainer_params["model"]["model_load_path"]
-                )
-            )
+    for batch_size in batch_sizes:
+        print(f"\n=== Training with Batch Size: {batch_size} ===")
+        
+        # Copy parameters to avoid contamination
+        current_net_params = json.loads(json.dumps(net_params))  # Deep copy
+        current_trainer_params = json.loads(json.dumps(base_trainer_params))
+        
+        # Update batch size
+        current_trainer_params["training"]["batch_size"] = batch_size
+        
+        # Create new model and trainer
+        net = newMixNet2(current_net_params)
+        if current_trainer_params["model"]["load_model"]:
+            net.load_model_weights(current_trainer_params["model"]["model_load_path"])
+        
+        trainer = MixNetTrainer(current_trainer_params, net)
+        trainer.load_data()
+        
+        # Train and collect losses
+        if current_trainer_params["train"]:
+            trainer.train()
+        
+        # Store losses
+        all_train_losses[batch_size] = trainer.train_losses
+        all_val_losses[batch_size] = trainer.val_losses
 
-    # initializing the trainer:
-    trainer_params.update(args.__dict__)
-    trainer = MixNetTrainer(trainer_params, net)
+    # Plotting
+    plt.figure(figsize=(12, 8))
+    colors = plt.cm.viridis(np.linspace(0, 1, len(batch_sizes)))
+    
+    for i, bs in enumerate(batch_sizes):
+        plt.plot(all_train_losses[bs], 
+                color=colors[i],
+                linestyle='-',
+                label=f'Train BS={bs}')
+        plt.plot(all_val_losses[bs],
+                color=colors[i],
+                linestyle='--',
+                label=f'Val BS={bs}')
 
-    trainer.load_data()
+    plt.xlabel('Epoch')
+    plt.ylabel('Total Loss')
+    plt.title('Training and Validation Loss by Batch Size')
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.grid(True)
+    plt.tight_layout()
+    
+    # Save or show plot
+    if args.save_figs:
+        plt.savefig('batch_size_comparison.png', dpi=300, bbox_inches='tight')
+    else:
+        plt.show()
 
-    # main loops:
-    if trainer_params["train"]:
-        trainer.train()
-
-        if trainer_params["test"]:
-            # loading the best model if testing will also be carried out:
-            trainer.load_best_saved_model()
-
-    if trainer_params["test"]:
-        test_loss = trainer.test()
-        print("TEST LOSS: {:.4f}".format(test_loss))
-
-        trainer.visualize_test()
+    # Original testing code (optional)
+    if base_trainer_params["test"]:
+        # Load best model for final testing if needed
+        final_trainer = MixNetTrainer(base_trainer_params, net)
+        final_trainer.load_data()
+        test_loss = final_trainer.test()
+        print("FINAL TEST LOSS: {:.4f}".format(test_loss))
