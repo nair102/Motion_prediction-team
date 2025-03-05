@@ -116,6 +116,21 @@ class newMixNet2(nn.Module):
 
         pe = pe.unsqueeze(1).repeat(1, batch_size, 1)  # expand to fill the batch size
         return x + pe
+    def _concat_positional_encoding(self, x):
+        seq_len, batch_size, embedding_dim = x.size()
+        pe = torch.zeros(seq_len, embedding_dim, device=self.device)
+        position = torch.arange(0, seq_len, dtype=torch.float, device=self.device).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, embedding_dim, 2, dtype=torch.float, device=self.device) *
+                             (-math.log(10000.0) / embedding_dim))
+        
+        # Apply sine to even indices and cosine to odd indices
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        
+        # Expand pe to match the batch dimension: (seq_len, batch_size, embedding_dim)
+        pe = pe.unsqueeze(1).repeat(1, batch_size, 1)
+        # The resulting tensor shape will be: (seq_len, batch_size, embedding_dim * 2)
+        return torch.cat((x, pe), dim=2)
 
     def forward(self, hist, left_bound, right_bound):
         """Implements the forward pass of the model.
