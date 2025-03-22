@@ -84,16 +84,23 @@ class newMixNet2(nn.Module):
             params["encoder"]["hidden_size"] * 3, params["acc_decoder"]["in_size"]
         )
 
-        # acceleration decoder:
-        self._acc_decoder = nn.LSTM(
-            params["acc_decoder"]["in_size"],
-            params["acc_decoder"]["hidden_size"],
-            1,
-            batch_first=True,
+        acc_decoder_layer = nn.TransformerEncoderLayer(
+            d_model=params["acc_decoder"]["in_size"],
+            nhead=params["acc_decoder"]["nhead"],
+            dim_feedforward=params["acc_decoder"]["dim_feedforward"],
+            dropout=params["acc_decoder"]["dropout"],
+            activation='relu',
+            batch_first=True
+        )
+        self._acc_decoder = nn.TransformerEncoder(
+            acc_decoder_layer,
+            num_layers=params["acc_decoder"]["num_layers"]
         )
 
+
+
         # output linear layer of the acceleration decoder:
-        self._acc_out_layer = nn.Linear(params["acc_decoder"]["hidden_size"], 1)
+        self._acc_out_layer = nn.Linear(params["acc_decoder"]["in_size"], 1)
 
         # migrating the model parameters to the chosen device:
         if params["use_cuda"] and torch.cuda.is_available():
@@ -116,6 +123,21 @@ class newMixNet2(nn.Module):
 
         pe = pe.unsqueeze(1).repeat(1, batch_size, 1)  # expand to fill the batch size
         return x + pe
+    
+    def _add_positional_encoding_batch_first(self, x):
+        """Adds positional encoding for batch-first tensors."""
+        batch_size, seq_len, d_model = x.size()
+        pe = torch.zeros(seq_len, d_model, device=self.device)
+        position = torch.arange(0, seq_len, dtype=torch.float, device=self.device).unsqueeze(1)
+        div_term = torch.exp(
+            torch.arange(0, d_model, 2, dtype=torch.float, device=self.device) *
+            (-math.log(10000.0) / d_model)
+        )
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0)  # Shape: (1, seq_len, d_model)
+        return x + pe  # Broadcasts to (batch_size, seq_len, d_model)
+
     def _concat_positional_encoding(self, x):
         seq_len, batch_size, embedding_dim = x.size()
         pe = torch.zeros(seq_len, embedding_dim, device=self.device)
@@ -188,7 +210,10 @@ class newMixNet2(nn.Module):
         dec_input = dec_input.repeat(
             1, self._params["acc_decoder"]["num_acc_sections"], 1
         )
-        acc_out, _ = self._acc_decoder(dec_input)
+        dec_input = self._add_positional_encoding_batch_first(dec_input)
+        # Process through transformer
+        acc_out = self._acc_decoder(dec_input)
+
         acc_out = torch.squeeze(self._acc_out_layer(torch.relu(acc_out)), dim=2)
         acc_out = torch.tanh(acc_out) * self._params["acc_decoder"]["max_acc"]
 

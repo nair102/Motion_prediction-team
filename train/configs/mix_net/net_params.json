@@ -20,9 +20,12 @@
         "max_vel": 90.0
     },
     "acc_decoder": {
-        "in_size": 16,
-        "hidden_size": 32,
-        "num_acc_sections": 5,
-        "max_acc": 30
+        "in_size": 256,
+        "nhead": 4,
+        "dim_feedforward": 512,
+        "num_layers": 2,
+        "dropout": 0.1,
+        "num_acc_sections": 10,
+        "max_acc": 2.0
     }
 }
