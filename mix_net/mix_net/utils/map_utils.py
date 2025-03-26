@@ -359,8 +359,8 @@ if __name__ == "__main__":
 
     matplotlib.use("TkAgg")
 
-    track_path = "mix_net/mix_net/data/map/traj_ltpl_cl_IMS_GPS.csv"
-
+    track_path = r"D:\Year 4\Spring\VIP\code\Motion_prediction-team\mix_net\mix_net\data\map\traj_ltpl_cl_IMS_GPS.csv"
+    print(track_path)
     track_list = get_track_kinematics("centerline", track_path=track_path, velocity=100)
     plt.plot(track_list[2][:, 0], track_list[2][:, 1])
     track_list = get_track_kinematics("raceline", track_path=track_path, velocity=100)

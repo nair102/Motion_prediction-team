@@ -85,10 +85,10 @@ class OvertakeDecisionMaker:
             [str]: [overtake_left or overtake_right]
         """
         side_dist_dict = {
-            "left_leading": np.infty,
-            "left_following": np.infty,
-            "right_leading": np.infty,
-            "right_following": np.infty,
+            "left_leading": np.inf,
+            "left_following": np.inf,
+            "right_leading": np.inf,
+            "right_following": np.inf,
         }
 
         # Calculate distances to the boundaries
@@ -104,7 +104,8 @@ class OvertakeDecisionMaker:
         side_dist_dict["right_following"] = distance_point_line(
             pos_following, self._bound_right
         )
-
+        print("Right boundary :",self._bound_right)
+        print("Left boundary :",self._bound_right)
         # If too close to a boundary, there is no space for overtaking
         if side_dist_dict["left_leading"] <= overtake_margin:
             return "overtake_right"
@@ -298,7 +299,8 @@ class OvertakeDecisionMaker:
 
 if __name__ == "__main__":
     # Load Map data
-    track_path = "data/map/traj_ltpl_cl_IMS_GPS.csv"
+    track_path = r"D:\Year 4\Spring\VIP\code\Motion_prediction-team\mix_net\mix_net\data\map\traj_ltpl_cl_IMS_GPS.csv"
+   
     if not os.path.exists(track_path):
         print("Track Data is missing, try to run with default csv-file from data/map")
         track_path = None
@@ -309,10 +311,11 @@ if __name__ == "__main__":
         bound_left,
         _,
     ) = get_track_paths(track_path, bool_track_width=True)
-
-    pos_leading = center_line[2500, :]
-    pos_following = center_line[2400, :]
-
+    print(center_line)
+    pos_leading = center_line[419, :]
+    pos_following = center_line[400, :]
+    print(pos_leading);
+    print(pos_following);
     decision_maker = OvertakeDecisionMaker(track_path)
 
     decision_maker.get_overtake_direction(pos_leading, pos_following)
