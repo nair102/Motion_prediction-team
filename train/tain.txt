@@ -23,6 +23,9 @@ def visualize_metrics(self):
     plt.title('Velocity Loss Across Epochs')
     plt.legend()
     plt.grid(True)
+for x, y in zip(epochs, train_path):
+    ax.annotate(f'({x}, {y:.2f})', (x, y), textcoords="offset points", 
+                xytext=(0, 10), ha='center', fontsize=8, color=line1.get_color())
 
     plt.tight_layout()
     plt.show()
