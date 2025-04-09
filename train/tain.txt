@@ -1,0 +1,28 @@
+def visualize_metrics(self):
+    epochs = self.train_metrics["epoch"]
+
+    # Create a figure with two subplots: one for path loss, one for velocity loss
+    plt.figure(figsize=(12, 5))
+
+    # Plot Path MSE for Training and Validation
+    plt.subplot(1, 2, 1)
+    plt.plot(epochs, self.train_metrics["train_path_loss"], label='Train Path MSE', marker='o')
+    plt.plot(epochs, self.train_metrics["val_path_loss"], label='Val Path MSE', marker='o')
+    plt.xlabel('Epoch')
+    plt.ylabel('MSE')
+    plt.title('Path Loss Across Epochs')
+    plt.legend()
+    plt.grid(True)
+
+    # Plot Velocity MSE for Training and Validation
+    plt.subplot(1, 2, 2)
+    plt.plot(epochs, self.train_metrics["train_vel_loss"], label='Train Vel MSE', marker='o')
+    plt.plot(epochs, self.train_metrics["val_vel_loss"], label='Val Vel MSE', marker='o')
+    plt.xlabel('Epoch')
+    plt.ylabel('MSE')
+    plt.title('Velocity Loss Across Epochs')
+    plt.legend()
+    plt.grid(True)
+
+    plt.tight_layout()
+    plt.show()
