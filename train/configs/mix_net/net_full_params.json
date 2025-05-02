@@ -6,7 +6,7 @@
         "nhead": 4,
         "dim_feedforward": 256,
         "dropout": 0.2,
-        "num_layers": 2
+        "num_layers": 3
     },
     "mixer_linear_stack": {
         "hidden_sizes": [
