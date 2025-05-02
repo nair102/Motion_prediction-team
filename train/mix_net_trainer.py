@@ -408,7 +408,7 @@ class MixNetTrainer:
                 "test"
             ]:
                 out = self._net(hist, left_bound, right_bound)
-
+                
                 path_loss, vel_loss = self._calc_loss(out, fut, fut_inds)
                 test_loss += (path_loss + vel_loss) / test_len
 
@@ -682,12 +682,17 @@ class MixNetTrainer:
                 )
             )
 
+
+
     def visualize_test(self):
         """Iterates through the test data and visualizes the data samples."""
 
         print("-" * 10 + " VISUALIZATION " + "-" * 10)
 
         self._net.eval()
+
+        print(len(self._dataloaders["test"]))
+        print()
 
         with torch.no_grad():
             for hist, fut, fut_inds, left_bound, right_bound in self._dataloaders[
@@ -708,7 +713,19 @@ class MixNetTrainer:
                 vel_out_np = vel_out.to("cpu").numpy()
                 acc_out_np = acc_out.to("cpu").numpy()
 
+                sortAindces = []
+
                 for i in range(mix_out.shape[0]):
+                    sortAindces.append([fut_inds_list[i][0], fut_inds_list[i][-1], i])
+
+                sortedIndices = sorted(sortAindces, key=lambda x: (x[0], x[1]))
+
+
+                for ito in range(mix_out.shape[0]):
+
+                    i = sortedIndices[ito][2]
+                    print(i)
+
                     fig = plt.figure(figsize=(15, 15))
                     if self._params["plt_vel"]:
                         ax = fig.add_subplot(221)
@@ -880,7 +897,7 @@ class MixNetTrainer:
 
                     if self._params["save_figs"]:
                         fig_save_path = "train/figs"
-                        if i == 0:
+                        if ito == 0:
                             if not os.path.exists(fig_save_path):
                                 os.makedirs(fig_save_path)
                             else:
@@ -889,7 +906,7 @@ class MixNetTrainer:
                                     for k in os.listdir(fig_save_path)
                                 ]
                         plt.savefig(
-                            os.path.join(fig_save_path, "%05d.svg" % i),
+                            os.path.join(fig_save_path, "%05d.svg" % ito),
                             format="svg",
                             dpi=300,
                         )
@@ -898,7 +915,7 @@ class MixNetTrainer:
 
                     plt.close()
 
-                    if i + 1 >= args.max_plots:
+                    if ito + 1 >= args.max_plots:
                         break
 
 
