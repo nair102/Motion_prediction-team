@@ -10,6 +10,8 @@ import shutil
 import argparse
 import pkbar
 import matplotlib.pyplot as plt
+import warnings
+from sklearn.gaussian_process.kernels import RBF, Matern, WhiteKernel, ConstantKernel
 
 plt.rcParams.update({"font.size": 16})
 plt.rcParams.update({"text.usetex": True})
@@ -43,6 +45,10 @@ from mix_net.mix_net.utils.line_helper import LineHelper
 from mix_net.mix_net.utils.map_utils import get_track_paths
 from train.data_set_helper import load_mix_net_data
 from train.neural_network import weighted_MSE
+
+from scipy.optimize import fmin_l_bfgs_b
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import Matern, WhiteKernel, ConstantKernel
 
 
 class MixNetTrainer:
@@ -398,19 +404,136 @@ class MixNetTrainer:
         t0 = time.time()
 
         self._net.eval()
-
         test_loss = 0.0
-
         test_len = len(self._dataloaders["test"])
 
+        warnings.filterwarnings("error", category=RuntimeWarning)
+        racerSum = []
+        racerSum.append(0)
+
+        for i in range(1, len(self._raceline.line)):
+            racerSum.append(racerSum[i - 1] + np.linalg.norm(self._raceline.line[i] - self._raceline.line[i - 1]))
+
+        tailing = True
+        Data = []
+
         with torch.no_grad():
+
             for hist, fut, fut_inds, left_bound, right_bound in self._dataloaders[
                 "test"
             ]:
                 out = self._net(hist, left_bound, right_bound)
-
+                
                 path_loss, vel_loss = self._calc_loss(out, fut, fut_inds)
-                test_loss += (path_loss + vel_loss) / test_len
+                # test_loss += (path_loss + vel_loss) / test_len
+                test_loss += (path_loss) / test_len # PLEASE CHANGE !!!!!!!
+
+                mix_out, vel_out, acc_out = out
+
+                mix_out_np = mix_out.to("cpu").numpy()
+                fut_np = fut.numpy()
+                left_bound_np = left_bound.numpy()
+                right_bound_np = right_bound.numpy()
+                fut_inds_list = fut_inds.numpy().tolist()  
+
+                vel_out_np = vel_out.to("cpu").numpy()
+                acc_out_np = acc_out.to("cpu").numpy()
+
+                sortAindces = []
+
+                for i in range(mix_out.shape[0]):
+                    sortAindces.append([fut_inds_list[i][0], fut_inds_list[i][-1], i])        
+
+                sortedIndices = sorted(sortAindces, key=lambda x: (x[0], -len(x)))
+
+                lastUsed = -1
+                numOfPoints = 0
+                numOfFigs = 0
+                print("\nbara")
+                lostUsed = -1
+                lostIto = -1
+
+                for ito in range(mix_out.shape[0]):
+                    
+                    if ito != 0 and sortedIndices[ito][0] < sortedIndices[lastUsed][1] :
+                        continue
+                    lastUsed = ito
+
+                    i = sortedIndices[ito][2]
+                    numOfPoints += len(fut_np[i])
+                    numOfFigs += 1 
+
+                    inds = fut_inds_list[i]
+                    race = self._raceline.line[inds, :] 
+
+                    for j in range(len(fut_np[i])):
+                    
+                        if lostIto == ito and (inds[j] < lostUsed):
+                            continue
+                        if lostUsed != -1 and lostIto < ito and (abs(inds[j] - lostUsed) > 20):
+                            continue
+                        lostUsed = inds[j]
+                        lostIto = ito
+
+                        p = fut_np[i][j]
+                        p0 = race[j]
+                        p1 = self._raceline.line[(inds[j] + 1) % len(self._raceline.line)]
+                            
+                        v = p1 - p0
+                        w = p - p0
+                        
+                        try:
+                            proj = np.dot(w, v) / np.dot(v, v)
+                            proj = np.clip(proj, 0.0, 1.0)  # Keep it on segment
+                            proj_point = p0 + proj * v
+
+                            d = np.cross(p1 - p0, p - p0) / np.linalg.norm(p1 - p0)
+                            s = racerSum[inds[j]]
+                            s += np.linalg.norm(p0 - proj_point)
+
+                            if tailing:
+                                Data.append([s, d, inds[j]])
+                            else:
+                                pred_d = self.gpr_d.predict(np.array(s).reshape(-1, 1))
+                                print("omar:%f %f" % (d, pred_d))
+                                # pass
+
+                        except RuntimeWarning as e:
+                            print("ERROR DIVIDE BY ZERO, PLEASE LOOK AT V")
+                            exit(0)
+
+                if tailing:
+
+                    constant_kernel1_d = ConstantKernel(constant_value=6, constant_value_bounds=(1e-6, 1e3))
+                    constant_kernel2_d = ConstantKernel(constant_value=0.2, constant_value_bounds=(1e-6, 1e3))
+                    kernel_d = constant_kernel1_d * Matern(length_scale=1.0, nu=3/2) + constant_kernel2_d * WhiteKernel(noise_level=1)
+
+                    def optimizer_wrapper(obj_func, initial_theta, bounds):
+                        solution, function_value, _ = fmin_l_bfgs_b(obj_func, initial_theta, bounds=bounds)
+                        return solution, function_value
+        
+                    self.gpr_d = GaussianProcessRegressor(kernel=kernel_d, optimizer=optimizer_wrapper)
+                    Data = np.array(Data)
+                    self.gpr_d.fit((Data[::2,0]).reshape(-1, 1), Data[::2,1])
+                    print("fitted!")
+
+                    pred_d = self.gpr_d.predict((Data[1::2,0]).reshape(-1, 1))
+                    
+                    for i in range(len(pred_d)):
+                        print("omar: %d: %f, %f" % (Data[(2*i)+1][2], Data[(2*i)+1][1], pred_d[i]))
+                    print(len(pred_d))
+                    # exit(0)
+                    
+                    Data = []
+                    # tailing = False
+
+                else:
+                    exit(0)
+                    self.gpr_d = None
+                    tailing = True
+
+
+
 
         print("Tested the network in {} s".format(time.time() - t0))
         print("Test RMSE: {} m".format(test_loss))
@@ -708,7 +831,32 @@ class MixNetTrainer:
                 vel_out_np = vel_out.to("cpu").numpy()
                 acc_out_np = acc_out.to("cpu").numpy()
 
+                print("bara")
+                print(mix_out.shape[0])
+
+                sortAindces = []
+
                 for i in range(mix_out.shape[0]):
+                    sortAindces.append([fut_inds_list[i][0], fut_inds_list[i][-1], i])
+
+                # sortedIndices = sorted(sortAindces, key=lambda x: (x[0],(self._raceline.line[x[1]][0] + fut_np[x[2]][-1][0])**2 + (self._raceline.line[x[1]][1] + fut_np[x[2]][-1][1])**2))
+                # sortedIndices = sorted(sortAindces, key=lambda x: (x[0], sum(np.linalg.norm(fut_np[x[2]][i] - fut_np[x[2]][i+1]) for i in range(len(fut_np[x[2]]) - 1))/len(fut_np[x[2]])))
+                sortedIndices = sorted(sortAindces, key=lambda x: (x[0], -len(x)))
+
+                lastUsed = -1
+                numOfPoints = 0
+                numOfFigs = 0
+
+                for ito in range(mix_out.shape[0]):
+                    
+                    if ito != 0 and sortedIndices[ito][0] < sortedIndices[lastUsed][1] :
+                        continue
+                    lastUsed = ito
+                    
+                    i = sortedIndices[ito][2]
+                    numOfPoints += len(fut_np[i])
+                    numOfFigs += 1
+
                     fig = plt.figure(figsize=(15, 15))
                     if self._params["plt_vel"]:
                         ax = fig.add_subplot(221)
@@ -726,6 +874,13 @@ class MixNetTrainer:
                     right = self._right_bound.line[inds, :]
                     center = self._centerline.line[inds, :]
                     race = self._raceline.line[inds, :]
+
+                    # print("window: ", end="")
+                    # for windowLooper in range(len(inds)):
+                    #     print(inds[windowLooper], fut_np[i][windowLooper][0],end=" ")
+                    # print()
+
+                    # print(inds[0], inds[-1])
 
                     pred = (
                         mix_out_np[i, 0] * left
@@ -880,7 +1035,7 @@ class MixNetTrainer:
 
                     if self._params["save_figs"]:
                         fig_save_path = "train/figs"
-                        if i == 0:
+                        if ito == 0:
                             if not os.path.exists(fig_save_path):
                                 os.makedirs(fig_save_path)
                             else:
@@ -889,7 +1044,7 @@ class MixNetTrainer:
                                     for k in os.listdir(fig_save_path)
                                 ]
                         plt.savefig(
-                            os.path.join(fig_save_path, "%05d.svg" % i),
+                            os.path.join(fig_save_path, "%05d.svg" % ito),
                             format="svg",
                             dpi=300,
                         )
@@ -898,8 +1053,11 @@ class MixNetTrainer:
 
                     plt.close()
 
-                    if i + 1 >= args.max_plots:
+                    if ito + 1 >= args.max_plots:
                         break
+
+                print(numOfPoints)
+                print(numOfFigs)
 
 
 if __name__ == "__main__":
