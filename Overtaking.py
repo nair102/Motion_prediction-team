@@ -20,7 +20,7 @@ collision prediction trace). Two GIFs are then saved:
   - "overtaking_plan.gif": shows a time-based simulation of both the ego and opponent
     vehicles moving along the track. In each frame, only the current positions are visible.
     
-Dependencies
+Dependencies:
   pip install numpy scipy matplotlib Pillow
 """
 
