@@ -56,6 +56,13 @@ class MixNetTrainer:
 
         # loss function:
         self._set_lossfunction()
+        self.train_metrices={
+            "epochs":[],
+            "train_path_loss":[],
+            "train_vel_loss":[],
+            "val_path_loss":[],
+            "val_vel_loss":[]
+        }
 
         # optimizer
         self._optimizer = torch.optim.Adam(
@@ -280,12 +287,19 @@ class MixNetTrainer:
                 num_epochs=self._params["training"]["num_epochs"],
             )
 
-            self._train(epoch)
-            self._validate(epoch)
-
+            x,y=self._train(epoch)
+            i,j=self._validate(epoch)
+            self.train_metrices["epochs"].append(epoch)
+            self.train_metrices["train_path_loss"].append(x.cpu().item())
+            self.train_metrices["train_vel_loss"].append(y.cpu().item())
+            self.train_metrices["val_path_loss"].append(i.cpu().item())
+            self.train_metrices["val_vel_loss"].append(j.cpu().item())
             self._scheduler.step()
 
+
         print("-" * 10 + " TRAINING END " + "-" * 10)
+        with open ("train_metrices_withAdding.json","w")as f:
+            json.dump(self.train_metrices,f)
 
     def _train(self, epoch):
         """Carries out an epoch of training by iterating through the
