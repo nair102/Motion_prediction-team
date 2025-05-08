@@ -159,7 +159,7 @@ class SQPAvoidanceNode:
                 half_width = (s_end - s_start) / 2.0
                 return -0.015 * (1 - ((s - mid) / half_width) ** 2)
 
-        # Objective: tracking plus smoothness.
+        # Objective: tracking plus smoothness
         def objective(d):
             d_arr = np.array(d)
             desired_profile = np.array([desired_d(s_val) for s_val in s_avoid])
